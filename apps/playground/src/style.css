@@ -178,6 +178,25 @@ textarea {
   font-weight: 600;
 }
 
+.trace-label {
+  margin-top: 16px;
+}
+
+.trace {
+  margin: 0;
+  border: 1px solid #888;
+  background: #f7f7f2;
+  color: #222;
+  min-height: 140px;
+  max-height: 240px;
+  padding: 12px 14px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
 footer {
   border-top: 1px solid var(--line);
   padding: 10px 24px;

@@ -2,22 +2,22 @@
 
 **A toy programming language for agent sessions.**
 
-Paste Claude Code / Codex / Cursor JSONL **or** write `.chatlang` source — `session`, `turn`, `think`, `tool`, `say`.
+Paste Claude Code / Codex / Cursor JSONL **or** write `.chatlang` source — then **Run** it.
 
-> Status: v0.2 — real grammar + lexer/parser (`@chatlang/lang`) + playground.
+> Status: v0.3 — grammar + parser + **interpreter** (`interpret` / playground Run).
 
 ## Monorepo
 
 ```
 apps/playground/           # Vite + GitHub Pages
 packages/ir/               # canonical session IR
-packages/lang/             # .chatlang lexer + parser → IR
+packages/lang/             # lexer, parser, interpreter
 packages/print/            # IR → chatlang text + tokens
 packages/parse-claude/
 packages/parse-codex/
 packages/parse-cursor/
 packages/fixtures/         # golden JSONL inputs
-docs/grammar.md            # EBNF
+docs/grammar.md            # EBNF + runtime
 ```
 
 Local package names: `@chatlang/*` (in-repo only; no npm publish yet).
@@ -30,7 +30,9 @@ Local package names: `@chatlang/*` (in-repo only; no npm publish yet).
 
 https://scs0209.github.io/chatlang/
 
-Try the **`.chatlang`** tab or sample **hello.chatlang**.
+1. Open **`.chatlang`** or click **hello.chatlang**
+2. Press **Run** — transcript appears (live builtins: `Echo`, `Upper`, `Len`)
+3. Or load a Claude/Codex/Cursor sample and **Run** in replay mode
 
 ## Example
 
@@ -38,22 +40,22 @@ Try the **`.chatlang`** tab or sample **hello.chatlang**.
 session claude;
 
 turn user() {
-  say "fix the flaky test";
+  say "ping the runtime";
 }
 
 turn agent() {
-  think "check cookie expiry";
-  tool Read("{\"path\":\"src/auth.test.ts\"}");
-  result ok "file contents…";
-  say "added null check";
+  think "use a live builtin";
+  tool Echo("{\"msg\":\"hello from chatlang\"}");
+  say "done";
 }
 ```
 
 ## Roadmap
 
-- **v0.1:** JSONL → IR → printable source (TypeScript).
-- **v0.2 (now):** grammar + `@chatlang/lang` parser; emit↔parse round-trip; playground `.chatlang` mode.
-- **Later:** interpreter / packages; optional Rust→WASM for the source grammar.
+- **v0.1:** JSONL → IR → printable source
+- **v0.2:** grammar + `@chatlang/lang` parser; round-trip
+- **v0.3 (now):** interpreter (replay / live) + playground Run
+- **Later:** packages/stdlib growth; optional Rust→WASM
 
 ## Setup
 

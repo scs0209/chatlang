@@ -157,9 +157,9 @@ Scan first **50** lines (or 64KB). Each line may contribute **at most one** form
 
 ## Next Steps
 
-0–6. Done (scaffold, fixtures, parsers, playground, Pages, **grammar + `@chatlang/lang`**).
-7. Optional polish: README GIF, Monaco, editable Source pane.
-8. **10x:** interpreter / packages; Rust→WASM only if source parsing needs it.
+0–7. Done (scaffold → parsers → grammar → **interpreter**).
+8. Optional polish: README GIF, Monaco, editable Source pane, CLI `chatlang run`.
+9. **10x:** richer stdlib / packages; Rust→WASM only if needed.
 
 ## Roadmap note (parsers)
 

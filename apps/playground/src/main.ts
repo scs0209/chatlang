@@ -1,9 +1,13 @@
 import "./style.css";
-import type { SourceFormat } from "@chatlang/ir";
+import type { IrSession, SourceFormat } from "@chatlang/ir";
 import { parseClaude, claudeSignatureHit } from "@chatlang/parse-claude";
 import { parseCodex, codexSignatureHit } from "@chatlang/parse-codex";
 import { parseCursor, cursorSignatureHit } from "@chatlang/parse-cursor";
-import { parseChatlang, chatlangSignatureHit } from "@chatlang/lang";
+import {
+  parseChatlang,
+  chatlangSignatureHit,
+  interpret,
+} from "@chatlang/lang";
 import { emit, type Token } from "@chatlang/print";
 
 import sampleClaude from "../../../packages/fixtures/claude/golden.jsonl?raw";
@@ -18,19 +22,20 @@ type UiState =
   | "ok"
   | "format_mismatch"
   | "parse_error"
-  | "too_large";
+  | "too_large"
+  | "ran";
 
 const SAMPLE_CHATLANG = `session claude;
 
 turn user() {
-  say "fix the flaky test";
+  say "ping the runtime";
 }
 
 turn agent() {
-  think "check cookie expiry";
-  tool Read("{\\"path\\":\\"src/auth.test.ts\\"}");
-  result ok "file contents…";
-  say "added null check";
+  think "use a live builtin";
+  tool Echo("{\\"msg\\":\\"hello from chatlang\\"}");
+  tool Upper("{\\"text\\":\\"chatlang\\"}");
+  say "Echo and Upper ran on the host";
 }
 `;
 
@@ -45,12 +50,13 @@ const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app missing");
 
 let format: InputMode = "claude";
+let lastSession: IrSession | null = null;
 
 app.innerHTML = `
   <div class="frame">
     <header>
       <h1 class="brand">chatlang</h1>
-      <p class="tag">A toy language for agent sessions — paste JSONL <em>or</em> write <code>.chatlang</code> source.</p>
+      <p class="tag">Toy language for agent sessions — parse JSONL, edit <code>.chatlang</code>, then <strong>Run</strong>.</p>
       <div class="formats" id="formats">
         <button type="button" data-format="claude" class="on">Claude</button>
         <button type="button" data-format="codex">Codex</button>
@@ -74,12 +80,15 @@ app.innerHTML = `
         <div class="label">Source</div>
         <div class="code" id="output">// load a sample or paste a session</div>
         <div class="actions">
-          <button type="button" class="primary" id="copy">Copy as code</button>
+          <button type="button" class="primary" id="run">Run</button>
+          <button type="button" id="copy">Copy as code</button>
           <button type="button" id="download">Download .chatlang</button>
         </div>
+        <div class="label trace-label">Transcript</div>
+        <pre class="trace" id="trace">// press Run</pre>
       </section>
     </main>
-    <footer>MIT · grammar in docs/grammar.md · @chatlang/lang</footer>
+    <footer>MIT · interpret: replay | live (Echo, Upper, Len) · docs/grammar.md</footer>
   </div>
 `;
 
@@ -90,6 +99,8 @@ const formats = document.querySelector<HTMLDivElement>("#formats")!;
 const samples = document.querySelector<HTMLDivElement>("#samples")!;
 const copyBtn = document.querySelector<HTMLButtonElement>("#copy")!;
 const downloadBtn = document.querySelector<HTMLButtonElement>("#download")!;
+const runBtn = document.querySelector<HTMLButtonElement>("#run")!;
+const trace = document.querySelector<HTMLPreElement>("#trace")!;
 
 formats.addEventListener("click", (ev) => {
   const t = ev.target;
@@ -141,6 +152,22 @@ downloadBtn.addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
   status.textContent = "Downloaded .chatlang";
+});
+
+runBtn.addEventListener("click", () => {
+  if (!lastSession) {
+    trace.textContent = "// nothing to run — fix parse errors first";
+    setState("parse_error", "no session to run");
+    return;
+  }
+  // Prefer live for .chatlang demos; replay for imported JSONL sessions
+  const mode = format === "chatlang" ? "live" : "replay";
+  const result = interpret(lastSession, { mode });
+  trace.textContent = `${result.transcript}\n\n# exit ${result.exitCode}`;
+  setState(
+    "ran",
+    `exit ${result.exitCode} · ${mode} · ${result.steps.length} steps`,
+  );
 });
 
 function maybeAutodetect(text: string): void {
@@ -210,8 +237,10 @@ function setState(state: UiState, message: string): void {
 function render(): void {
   const text = input.value;
   if (!text.trim()) {
+    lastSession = null;
     output.innerHTML = escapeHtml("// load a sample or paste a session");
     output.dataset.raw = "";
+    trace.textContent = "// press Run";
     setState("empty", "waiting for input");
     return;
   }
@@ -220,6 +249,7 @@ function render(): void {
   try {
     const result = parseFor(format, text);
     if (!result.ok) {
+      lastSession = null;
       const state: UiState =
         result.kind === "format_mismatch"
           ? "format_mismatch"
@@ -228,10 +258,12 @@ function render(): void {
             : "parse_error";
       output.textContent = `// ${result.message}`;
       output.dataset.raw = output.textContent;
+      trace.textContent = "// press Run";
       setState(state, result.message);
       return;
     }
 
+    lastSession = result.session;
     const emitted = emit(result.session);
     output.innerHTML = renderHighlighted(emitted.text, emitted.tokens);
     output.dataset.raw = emitted.text;
@@ -239,6 +271,7 @@ function render(): void {
       format === "chatlang" ? "parsed .chatlang" : `from ${format} JSONL`;
     setState("ok", `${result.session.events.length} events · ${via}`);
   } catch (err) {
+    lastSession = null;
     const message = err instanceof Error ? err.message : String(err);
     output.textContent = `// crash: ${message}`;
     output.dataset.raw = output.textContent;

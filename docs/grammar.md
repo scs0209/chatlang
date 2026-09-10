@@ -1,6 +1,6 @@
-# chatlang grammar (v0.2)
+# chatlang grammar (v0.3)
 
-Toy programming language surface for agent sessions.
+Toy programming language for agent sessions.
 Statement terminator: optional `;`. Newline is whitespace.
 
 ## EBNF
@@ -41,7 +41,29 @@ Ident       = [A-Za-z_][A-Za-z0-9_]*
 | `say S;` (in agent) | `assistant_message` |
 | `meta K = S;` | `meta` |
 
-Agent events between user turns are grouped into one `turn agent() { … }` by the printer.
+## Runtime (`interpret` / `run`)
+
+Two modes:
+
+| Mode | Behavior |
+|------|----------|
+| **replay** | Play back embedded `result` (imported JSONL sessions). |
+| **live** | Call host tools when registered; else use embedded `result`; else error. |
+
+Built-in host tools: `Echo`, `Upper`, `Len`.
+
+Transcript lines:
+
+```
+# session claude
+→ user: …
+… think: …
+⚙ tool Echo({"msg":"…"})
+← ok (host): …
+→ agent: …
+```
+
+Exit codes: `0` ok, `1` runtime error, `2` parse error (`run` only).
 
 ## Example
 
@@ -49,13 +71,12 @@ Agent events between user turns are grouped into one `turn agent() { … }` by t
 session claude;
 
 turn user() {
-  say "fix the flaky test";
+  say "ping the runtime";
 }
 
 turn agent() {
-  think "check cookie expiry";
-  tool Read("{\"path\":\"src/auth.test.ts\"}");
-  result ok "file contents…";
-  say "added null check";
+  think "use a live builtin";
+  tool Echo("{\"msg\":\"hello from chatlang\"}");
+  say "done";
 }
 ```
