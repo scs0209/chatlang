@@ -18,7 +18,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      - run: pnpm --filter @chatlang/playground build
+      # ... includes workspace deps so @chatlang/* dist exists for tsc
+      - run: pnpm --filter "@chatlang/playground..." build
 
   pages:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -39,7 +40,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @chatlang/playground build
+      - run: pnpm --filter "@chatlang/playground..." build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/playground/dist
