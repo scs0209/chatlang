@@ -43,27 +43,17 @@ Ident       = [A-Za-z_][A-Za-z0-9_]*
 
 ## Runtime (`interpret` / `run`)
 
-Two modes:
+Default mode is **live** against an in-memory **World** (`files` + `console`).
 
-| Mode | Behavior |
-|------|----------|
-| **replay** | Play back embedded `result` (imported JSONL sessions). |
-| **live** | Call host tools when registered; else use embedded `result`; else error. |
+| Tool | Effect |
+|------|--------|
+| `Write` / `Edit` | creates/updates `world.files[path]` |
+| `Read` | returns file contents (or hydrates from replay result) |
+| `Shell` / `Bash` | sandbox: `ls`, `cat`, `echo … > file` |
+| `Echo` / `Upper` / `Len` | console helpers |
+| unknown | skipped (non-fatal) unless a recorded `result` exists |
 
-Built-in host tools: `Echo`, `Upper`, `Len`.
-
-Transcript lines:
-
-```
-# session claude
-→ user: …
-… think: …
-⚙ tool Echo({"msg":"…"})
-← ok (host): …
-→ agent: …
-```
-
-Exit codes: `0` ok, `1` runtime error, `2` parse error (`run` only).
+Playground shows **Transcript · Virtual files · Console** after Run — the language’s side effects.
 
 ## Example
 

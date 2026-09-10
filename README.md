@@ -4,35 +4,20 @@
 
 Paste Claude Code / Codex / Cursor JSONL **or** write `.chatlang` source — then **Run** it.
 
-> Status: v0.3 — grammar + parser + **interpreter** (`interpret` / playground Run).
-
-## Monorepo
-
-```
-apps/playground/           # Vite + GitHub Pages
-packages/ir/               # canonical session IR
-packages/lang/             # lexer, parser, interpreter
-packages/print/            # IR → chatlang text + tokens
-packages/parse-claude/
-packages/parse-codex/
-packages/parse-cursor/
-packages/fixtures/         # golden JSONL inputs
-docs/grammar.md            # EBNF + runtime
-```
-
-Local package names: `@chatlang/*` (in-repo only; no npm publish yet).
-
-## Git identity
-
-**Commits and pushes must be `scs0209 <scs0209@users.noreply.github.com>` only** (not personal/work accounts). See [CONTRIBUTING.md](CONTRIBUTING.md).
+> Status: v0.4 — **Run mutates a virtual workspace** (Read/Write/Shell sandbox).
 
 ## Live demo
 
 https://scs0209.github.io/chatlang/
 
-1. Open **`.chatlang`** or click **hello.chatlang**
-2. Press **Run** — transcript appears (live builtins: `Echo`, `Upper`, `Len`)
-3. Or load a Claude/Codex/Cursor sample and **Run** in replay mode
+Page opens on **hello.chatlang** and auto-runs:
+
+1. Source shows `tool Write` / `Read` / `Shell`
+2. **Transcript** shows host execution
+3. **Virtual files** gains `hello.txt`
+4. **Console** shows `ls` output
+
+That’s the gimmick: the converted language *does* something.
 
 ## Example
 

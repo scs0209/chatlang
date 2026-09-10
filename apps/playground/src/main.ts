@@ -7,6 +7,8 @@ import {
   parseChatlang,
   chatlangSignatureHit,
   interpret,
+  createWorld,
+  formatFiles,
 } from "@chatlang/lang";
 import { emit, type Token } from "@chatlang/print";
 
@@ -28,14 +30,15 @@ type UiState =
 const SAMPLE_CHATLANG = `session claude;
 
 turn user() {
-  say "ping the runtime";
+  say "create hello.txt and prove the program runs";
 }
 
 turn agent() {
-  think "use a live builtin";
-  tool Echo("{\\"msg\\":\\"hello from chatlang\\"}");
-  tool Upper("{\\"text\\":\\"chatlang\\"}");
-  say "Echo and Upper ran on the host";
+  think "write, read, list via sandbox";
+  tool Write("{\\"path\\":\\"hello.txt\\",\\"content\\":\\"hello from chatlang\\\\n\\"}");
+  tool Read("{\\"path\\":\\"hello.txt\\"}");
+  tool Shell("{\\"command\\":\\"ls\\"}");
+  say "file exists in the virtual workspace";
 }
 `;
 
@@ -49,19 +52,19 @@ const SAMPLES: Record<InputMode, string> = {
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app missing");
 
-let format: InputMode = "claude";
+let format: InputMode = "chatlang";
 let lastSession: IrSession | null = null;
 
 app.innerHTML = `
   <div class="frame">
     <header>
       <h1 class="brand">chatlang</h1>
-      <p class="tag">Toy language for agent sessions — parse JSONL, edit <code>.chatlang</code>, then <strong>Run</strong>.</p>
+      <p class="tag">Paste an agent session → get a program → <strong>Run</strong> it. Tools write a virtual workspace.</p>
       <div class="formats" id="formats">
-        <button type="button" data-format="claude" class="on">Claude</button>
+        <button type="button" data-format="claude">Claude</button>
         <button type="button" data-format="codex">Codex</button>
         <button type="button" data-format="cursor">Cursor</button>
-        <button type="button" data-format="chatlang">.chatlang</button>
+        <button type="button" data-format="chatlang" class="on">.chatlang</button>
       </div>
     </header>
     <main>
@@ -69,10 +72,10 @@ app.innerHTML = `
         <div class="label">Input</div>
         <textarea id="input" placeholder="JSONL session or .chatlang source…"></textarea>
         <div class="samples" id="samples">
+          <button type="button" data-sample="chatlang">hello.chatlang</button>
           <button type="button" data-sample="claude">debug-claude</button>
           <button type="button" data-sample="codex">debug-codex</button>
           <button type="button" data-sample="cursor">cursor-multifile</button>
-          <button type="button" data-sample="chatlang">hello.chatlang</button>
         </div>
         <div class="status" id="status"></div>
       </section>
@@ -80,15 +83,25 @@ app.innerHTML = `
         <div class="label">Source</div>
         <div class="code" id="output">// load a sample or paste a session</div>
         <div class="actions">
-          <button type="button" class="primary" id="run">Run</button>
+          <button type="button" class="primary" id="run">Run ▶</button>
           <button type="button" id="copy">Copy as code</button>
           <button type="button" id="download">Download .chatlang</button>
         </div>
-        <div class="label trace-label">Transcript</div>
-        <pre class="trace" id="trace">// press Run</pre>
+        <div class="effect-grid">
+          <div>
+            <div class="label">Transcript</div>
+            <pre class="trace" id="trace">// press Run</pre>
+          </div>
+          <div>
+            <div class="label">Virtual files</div>
+            <pre class="trace files" id="files">(empty)</pre>
+          </div>
+        </div>
+        <div class="label">Console</div>
+        <pre class="trace console" id="console">(empty)</pre>
       </section>
     </main>
-    <footer>MIT · interpret: replay | live (Echo, Upper, Len) · docs/grammar.md</footer>
+    <footer>MIT · Run executes Read/Write/Shell in a sandbox · docs/grammar.md</footer>
   </div>
 `;
 
@@ -101,6 +114,8 @@ const copyBtn = document.querySelector<HTMLButtonElement>("#copy")!;
 const downloadBtn = document.querySelector<HTMLButtonElement>("#download")!;
 const runBtn = document.querySelector<HTMLButtonElement>("#run")!;
 const trace = document.querySelector<HTMLPreElement>("#trace")!;
+const filesEl = document.querySelector<HTMLPreElement>("#files")!;
+const consoleEl = document.querySelector<HTMLPreElement>("#console")!;
 
 formats.addEventListener("click", (ev) => {
   const t = ev.target;
@@ -125,6 +140,7 @@ samples.addEventListener("click", (ev) => {
   }
   input.value = SAMPLES[key];
   render();
+  runProgram();
 });
 
 input.addEventListener("input", () => {
@@ -154,21 +170,51 @@ downloadBtn.addEventListener("click", () => {
   status.textContent = "Downloaded .chatlang";
 });
 
-runBtn.addEventListener("click", () => {
+runBtn.addEventListener("click", () => runProgram());
+
+function clearEffects(): void {
+  trace.textContent = "// press Run";
+  filesEl.textContent = "(empty)";
+  consoleEl.textContent = "(empty)";
+}
+
+function runProgram(): void {
   if (!lastSession) {
     trace.textContent = "// nothing to run — fix parse errors first";
+    filesEl.textContent = "(empty)";
+    consoleEl.textContent = "(empty)";
     setState("parse_error", "no session to run");
     return;
   }
-  // Prefer live for .chatlang demos; replay for imported JSONL sessions
-  const mode = format === "chatlang" ? "live" : "replay";
-  const result = interpret(lastSession, { mode });
+
+  // Always execute against sandbox. Unknown tools fall back to replay results
+  // and still hydrate Virtual files when possible.
+  const seed =
+    format === "cursor"
+      ? {
+          "/Users/demo/project": "# demo workspace\n(package.json, src/, …)\n",
+          "/Users/demo/project/README.md": "# demo project\n",
+        }
+      : {};
+
+  const result = interpret(lastSession, {
+    mode: "live",
+    world: createWorld(seed),
+  });
+
   trace.textContent = `${result.transcript}\n\n# exit ${result.exitCode}`;
+  filesEl.textContent = formatFiles(result.world);
+  consoleEl.textContent =
+    result.world.console.length > 0
+      ? result.world.console.join("\n")
+      : "(empty)";
+
+  const fileCount = Object.keys(result.world.files).length;
   setState(
     "ran",
-    `exit ${result.exitCode} · ${mode} · ${result.steps.length} steps`,
+    `exit ${result.exitCode} · ${result.steps.length} steps · ${fileCount} files`,
   );
-});
+}
 
 function maybeAutodetect(text: string): void {
   if (chatlangSignatureHit(text)) {
@@ -240,7 +286,7 @@ function render(): void {
     lastSession = null;
     output.innerHTML = escapeHtml("// load a sample or paste a session");
     output.dataset.raw = "";
-    trace.textContent = "// press Run";
+    clearEffects();
     setState("empty", "waiting for input");
     return;
   }
@@ -258,7 +304,7 @@ function render(): void {
             : "parse_error";
       output.textContent = `// ${result.message}`;
       output.dataset.raw = output.textContent;
-      trace.textContent = "// press Run";
+      clearEffects();
       setState(state, result.message);
       return;
     }
@@ -269,7 +315,7 @@ function render(): void {
     output.dataset.raw = emitted.text;
     const via =
       format === "chatlang" ? "parsed .chatlang" : `from ${format} JSONL`;
-    setState("ok", `${result.session.events.length} events · ${via}`);
+    setState("ok", `${result.session.events.length} events · ${via} · press Run`);
   } catch (err) {
     lastSession = null;
     const message = err instanceof Error ? err.message : String(err);
@@ -279,6 +325,7 @@ function render(): void {
   }
 }
 
-// boot with Claude sample so the language is visible immediately
-input.value = SAMPLES.claude;
+// Boot on the executable demo so the gimmick is obvious
+input.value = SAMPLES.chatlang;
 render();
+runProgram();

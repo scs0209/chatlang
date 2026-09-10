@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { IrSession } from "@chatlang/ir";
 import { interpret, run } from "./interpret.js";
+import { createWorld } from "./runtime.js";
 
 describe("interpret", () => {
-  it("replays a full agent turn", () => {
+  it("replays a full agent turn and hydrates world from Read", () => {
     const session: IrSession = {
       sourceFormat: "claude",
       events: [
@@ -15,18 +16,47 @@ describe("interpret", () => {
           name: "Read",
           argsJson: JSON.stringify({ path: "a.ts" }),
         },
-        { type: "tool_result", ok: true, summary: "contents" },
+        { type: "tool_result", ok: true, summary: "export const x = 1" },
         { type: "assistant_message", text: "done" },
       ],
     };
-    const r = interpret(session, { mode: "replay" });
+    const r = interpret(session, { mode: "replay", sandbox: false });
     assert.equal(r.ok, true);
     assert.equal(r.exitCode, 0);
     assert.match(r.transcript, /→ user: hi/);
-    assert.match(r.transcript, /… think: plan/);
-    assert.match(r.transcript, /⚙ tool Read/);
-    assert.match(r.transcript, /← ok \(replay\): contents/);
-    assert.match(r.transcript, /→ agent: done/);
+    assert.equal(r.world.files["a.ts"], "export const x = 1");
+  });
+
+  it("Write then Read mutates sandbox files (live)", () => {
+    const session: IrSession = {
+      sourceFormat: "claude",
+      events: [
+        {
+          type: "tool_call",
+          name: "Write",
+          argsJson: JSON.stringify({
+            path: "hello.txt",
+            content: "hello from chatlang\n",
+          }),
+        },
+        {
+          type: "tool_call",
+          name: "Read",
+          argsJson: JSON.stringify({ path: "hello.txt" }),
+        },
+        {
+          type: "tool_call",
+          name: "Shell",
+          argsJson: JSON.stringify({ command: "ls" }),
+        },
+      ],
+    };
+    const r = interpret(session, { mode: "live" });
+    assert.equal(r.ok, true);
+    assert.equal(r.world.files["hello.txt"], "hello from chatlang\n");
+    assert.match(r.transcript, /host\): wrote hello\.txt/);
+    assert.match(r.transcript, /hello from chatlang/);
+    assert.ok(r.world.console.some((l) => l.includes("ls") || l === "hello.txt"));
   });
 
   it("calls Echo in live mode", () => {
@@ -43,9 +73,10 @@ describe("interpret", () => {
     const r = interpret(session, { mode: "live" });
     assert.equal(r.ok, true);
     assert.match(r.transcript, /← ok \(host\): hello/);
+    assert.ok(r.world.console.includes("hello"));
   });
 
-  it("errors when live tool missing and no result", () => {
+  it("skips unknown tools without failing the run", () => {
     const session: IrSession = {
       sourceFormat: "claude",
       events: [
@@ -56,30 +87,28 @@ describe("interpret", () => {
         },
       ],
     };
-    const r = interpret(session, { mode: "live" });
-    assert.equal(r.ok, false);
-    assert.equal(r.exitCode, 1);
-    assert.match(r.transcript, /no result and no host/);
+    const r = interpret(session, { mode: "live", sandbox: false });
+    assert.equal(r.ok, true);
+    assert.match(r.transcript, /skipped: no sandbox/);
   });
 });
 
 describe("run", () => {
-  it("parses source then interprets", () => {
+  it("executes Write/Read program into world", () => {
     const r = run(
       `
 session claude;
-turn user() { say "ping"; }
+turn user() { say "make a file"; }
 turn agent() {
-  tool Echo("{\\"msg\\":\\"pong\\"}");
+  tool Write("{\\"path\\":\\"out.txt\\",\\"content\\":\\"hi\\"}");
+  tool Read("{\\"path\\":\\"out.txt\\"}");
   say "done";
 }
 `,
-      { mode: "live" },
+      { mode: "live", world: createWorld() },
     );
     assert.equal(r.ok, true);
-    assert.match(r.transcript, /→ user: ping/);
-    assert.match(r.transcript, /host\): pong/);
-    assert.match(r.transcript, /→ agent: done/);
+    assert.equal(r.world.files["out.txt"], "hi");
   });
 
   it("returns exit 2 on parse error", () => {

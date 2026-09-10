@@ -1,5 +1,13 @@
 import type { IrEvent, IrSession } from "@chatlang/ir";
 import { parseChatlang } from "./parse.js";
+import {
+  applyToolEffect,
+  createSandboxTools,
+  createWorld,
+  snapshotWorld,
+  type HostTool,
+  type World,
+} from "./runtime.js";
 
 export type TraceStep =
   | { type: "session"; format: string }
@@ -16,14 +24,28 @@ export type TraceStep =
   | { type: "meta"; key: string; value: string }
   | { type: "error"; message: string };
 
-export type HostTool = (argsJson: string) => { ok: boolean; summary: string };
+export type { HostTool, World };
+export {
+  createWorld,
+  createSandboxTools,
+  applyToolEffect,
+  formatFiles,
+  snapshotWorld,
+} from "./runtime.js";
 
 export type InterpretMode = "replay" | "live";
 
 export interface InterpretOptions {
-  /** replay = use `result` from source; live = call host tools when registered. */
+  /**
+   * replay = only embedded `result` (still hydrates World from effects).
+   * live = call sandbox/host tools when available; else fall back to replay.
+   */
   mode?: InterpretMode;
   tools?: Record<string, HostTool>;
+  /** Seed files before run (virtual workspace). */
+  world?: World;
+  /** Attach default Read/Write/Shell sandbox (default true in live). */
+  sandbox?: boolean;
 }
 
 export interface InterpretResult {
@@ -31,62 +53,25 @@ export interface InterpretResult {
   exitCode: number;
   steps: TraceStep[];
   transcript: string;
+  /** Visible side effects — the gimmick. */
+  world: World;
 }
 
-/** Built-in host tools for live mode demos. */
-export const builtinTools: Record<string, HostTool> = {
-  Echo(argsJson) {
-    try {
-      const v = JSON.parse(argsJson) as unknown;
-      if (v && typeof v === "object" && "msg" in v) {
-        return { ok: true, summary: String((v as { msg: unknown }).msg) };
-      }
-      return { ok: true, summary: argsJson };
-    } catch {
-      return { ok: true, summary: argsJson };
-    }
-  },
-  Upper(argsJson) {
-    try {
-      const v = JSON.parse(argsJson) as unknown;
-      const s =
-        typeof v === "string"
-          ? v
-          : v && typeof v === "object" && "text" in v
-            ? String((v as { text: unknown }).text)
-            : argsJson;
-      return { ok: true, summary: s.toUpperCase() };
-    } catch {
-      return { ok: true, summary: argsJson.toUpperCase() };
-    }
-  },
-  Len(argsJson) {
-    try {
-      const v = JSON.parse(argsJson) as unknown;
-      const s =
-        typeof v === "string"
-          ? v
-          : v && typeof v === "object" && "text" in v
-            ? String((v as { text: unknown }).text)
-            : argsJson;
-      return { ok: true, summary: String([...s].length) };
-    } catch {
-      return { ok: false, summary: "Len: invalid args" };
-    }
-  },
-};
-
 /**
- * Interpret an IR session.
- * - **replay:** trust embedded `result` statements (session playback).
- * - **live:** call registered host tools; fall back to embedded `result` if no host.
+ * Interpret an IR session into a transcript + mutable World.
  */
 export function interpret(
   session: IrSession,
   options: InterpretOptions = {},
 ): InterpretResult {
-  const mode = options.mode ?? "replay";
-  const tools = { ...builtinTools, ...options.tools };
+  const mode = options.mode ?? "live";
+  const world = options.world ?? createWorld();
+  const useSandbox = options.sandbox ?? mode === "live";
+  const tools: Record<string, HostTool> = {
+    ...(useSandbox ? createSandboxTools(world) : {}),
+    ...options.tools,
+  };
+
   const steps: TraceStep[] = [
     { type: "session", format: session.sourceFormat },
   ];
@@ -131,9 +116,12 @@ export function interpret(
           ? (next as Extract<IrEvent, { type: "tool_result" }>)
           : undefined;
 
-      if (mode === "live" && tools[ev.name]) {
+      const host = lookupTool(tools, ev.name);
+
+      if (mode === "live" && host) {
         try {
-          const out = tools[ev.name]!(ev.argsJson);
+          const out = host(ev.argsJson);
+          // sandbox/host tools mutate world themselves
           steps.push({
             type: "result",
             ok: out.ok,
@@ -146,11 +134,13 @@ export function interpret(
           steps.push({ type: "error", message: `tool ${ev.name}: ${message}` });
           ok = false;
         }
-        if (recorded) i += 1; // consume recorded result in live+host
+        if (recorded) i += 1;
         continue;
       }
 
       if (recorded) {
+        const out = { ok: recorded.ok, summary: recorded.summary };
+        applyToolEffect(world, ev.name, ev.argsJson, out);
         steps.push({
           type: "result",
           ok: recorded.ok,
@@ -163,15 +153,16 @@ export function interpret(
       }
 
       steps.push({
-        type: "error",
-        message: `tool ${ev.name}: no result and no host implementation`,
+        type: "result",
+        ok: true,
+        summary: `(skipped: no sandbox for ${ev.name})`,
+        source: "host",
       });
-      ok = false;
+      world.console.push(`skip ${ev.name}`);
       continue;
     }
 
     if (ev.type === "tool_result") {
-      // orphan result (no preceding tool in this walk) — still record
       steps.push({
         type: "result",
         ok: ev.ok,
@@ -188,7 +179,17 @@ export function interpret(
     exitCode: ok ? 0 : 1,
     steps,
     transcript,
+    world: snapshotWorld(world),
   };
+}
+
+function lookupTool(
+  tools: Record<string, HostTool>,
+  name: string,
+): HostTool | undefined {
+  if (tools[name]) return tools[name];
+  const cleaned = name.replace(/[^A-Za-z0-9_]/g, "_");
+  return tools[cleaned];
 }
 
 /** Parse `.chatlang` source then interpret. */
@@ -198,14 +199,13 @@ export function run(
 ): InterpretResult {
   const parsed = parseChatlang(source);
   if (!parsed.ok) {
-    const steps: TraceStep[] = [
-      { type: "error", message: parsed.message },
-    ];
+    const steps: TraceStep[] = [{ type: "error", message: parsed.message }];
     return {
       ok: false,
       exitCode: 2,
       steps,
       transcript: formatTranscript(steps),
+      world: snapshotWorld(options.world ?? createWorld()),
     };
   }
   return interpret(parsed.session, options);
