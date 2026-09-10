@@ -4,7 +4,7 @@
 
 Paste a Claude Code / Codex / Cursor session → see it as a toy programming language (`turn`, `think`, `tool`, `say`).
 
-> Status: scaffold. Parsers ship after golden fixtures land (see Assignment below).
+> Status: v0.1 playground — paste or load a sample, see `chatlang` source.
 
 ## Monorepo
 

@@ -37,6 +37,9 @@ importers:
 
   packages/ir:
     devDependencies:
+      '@types/node':
+        specifier: ^22.13.10
+        version: 22.20.2
       typescript:
         specifier: ^5.8.2
         version: 5.9.3
@@ -47,6 +50,9 @@ importers:
         specifier: workspace:*
         version: link:../ir
     devDependencies:
+      '@chatlang/print':
+        specifier: workspace:*
+        version: link:../print
       '@types/node':
         specifier: ^22.13.10
         version: 22.20.2
@@ -60,6 +66,9 @@ importers:
         specifier: workspace:*
         version: link:../ir
     devDependencies:
+      '@chatlang/print':
+        specifier: workspace:*
+        version: link:../print
       '@types/node':
         specifier: ^22.13.10
         version: 22.20.2
@@ -73,6 +82,9 @@ importers:
         specifier: workspace:*
         version: link:../ir
     devDependencies:
+      '@chatlang/print':
+        specifier: workspace:*
+        version: link:../print
       '@types/node':
         specifier: ^22.13.10
         version: 22.20.2

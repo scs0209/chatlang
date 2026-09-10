@@ -110,6 +110,22 @@ textarea {
   resize: vertical;
 }
 
+.samples {
+  margin-top: 12px;
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.samples button {
+  font: inherit;
+  border: 1px solid #888;
+  background: #fafafa;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
 .status {
   margin-top: 8px;
   font-size: 12px;

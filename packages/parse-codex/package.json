@@ -19,6 +19,7 @@
     "@chatlang/ir": "workspace:*"
   },
   "devDependencies": {
+    "@chatlang/print": "workspace:*",
     "@types/node": "^22.13.10",
     "typescript": "^5.8.2"
   }
