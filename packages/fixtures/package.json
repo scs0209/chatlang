@@ -1,0 +1,11 @@
+{
+  "name": "@chatlang/fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node -e \"process.exit(0)\"",
+    "test": "node --test check.mjs",
+    "typecheck": "node -e \"process.exit(0)\""
+  }
+}

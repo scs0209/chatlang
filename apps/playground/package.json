@@ -1,0 +1,24 @@
+{
+  "name": "@chatlang/playground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run typecheck"
+  },
+  "dependencies": {
+    "@chatlang/ir": "workspace:*",
+    "@chatlang/parse-claude": "workspace:*",
+    "@chatlang/parse-codex": "workspace:*",
+    "@chatlang/parse-cursor": "workspace:*",
+    "@chatlang/print": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}
