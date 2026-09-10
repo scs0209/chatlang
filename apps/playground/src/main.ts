@@ -6,9 +6,7 @@ import { parseCursor, cursorSignatureHit } from "@chatlang/parse-cursor";
 import {
   parseChatlang,
   chatlangSignatureHit,
-  interpret,
-  createWorld,
-  formatFiles,
+  roast,
 } from "@chatlang/lang";
 import { emit, type Token } from "@chatlang/print";
 
@@ -25,20 +23,22 @@ type UiState =
   | "format_mismatch"
   | "parse_error"
   | "too_large"
-  | "ran";
+  | "roasted";
 
 const SAMPLE_CHATLANG = `session claude;
 
 turn user() {
-  say "create hello.txt and prove the program runs";
+  say "이 레포 구조 파악해줘. 급해.";
 }
 
 turn agent() {
-  think "write, read, list via sandbox";
-  tool Write("{\\"path\\":\\"hello.txt\\",\\"content\\":\\"hello from chatlang\\\\n\\"}");
-  tool Read("{\\"path\\":\\"hello.txt\\"}");
-  tool Shell("{\\"command\\":\\"ls\\"}");
-  say "file exists in the virtual workspace";
+  think "일단 파일 전부 읽은 다음 웹도 보고 생각해보자. 계획은 거창하게.";
+  tool Read("{\\"path\\":\\"a.ts\\"}");
+  tool Read("{\\"path\\":\\"b.ts\\"}");
+  tool Read("{\\"path\\":\\"c.ts\\"}");
+  tool WebFetch("{\\"url\\":\\"https://example.com\\"}");
+  tool WebSearch("{\\"search_term\\":\\"how to code\\"}");
+  say "음… 복잡한데요.";
 }
 `;
 
@@ -52,19 +52,20 @@ const SAMPLES: Record<InputMode, string> = {
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app missing");
 
-let format: InputMode = "chatlang";
+let format: InputMode = "cursor";
 let lastSession: IrSession | null = null;
+let lastRoastSource = "";
 
 app.innerHTML = `
   <div class="frame">
     <header>
       <h1 class="brand">chatlang</h1>
-      <p class="tag">Paste an agent session → get a program → <strong>Run</strong> it. Tools write a virtual workspace.</p>
+      <p class="tag">에이전트 세션을 붙여넣으면 → 소스코드로 바뀌고 → <strong>Roast</strong>가 한 페이지로 디스한다.</p>
       <div class="formats" id="formats">
         <button type="button" data-format="claude">Claude</button>
         <button type="button" data-format="codex">Codex</button>
-        <button type="button" data-format="cursor">Cursor</button>
-        <button type="button" data-format="chatlang" class="on">.chatlang</button>
+        <button type="button" data-format="cursor" class="on">Cursor</button>
+        <button type="button" data-format="chatlang">.chatlang</button>
       </div>
     </header>
     <main>
@@ -72,36 +73,33 @@ app.innerHTML = `
         <div class="label">Input</div>
         <textarea id="input" placeholder="JSONL session or .chatlang source…"></textarea>
         <div class="samples" id="samples">
-          <button type="button" data-sample="chatlang">hello.chatlang</button>
+          <button type="button" data-sample="cursor">cursor-multifile</button>
           <button type="button" data-sample="claude">debug-claude</button>
           <button type="button" data-sample="codex">debug-codex</button>
-          <button type="button" data-sample="cursor">cursor-multifile</button>
+          <button type="button" data-sample="chatlang">chaos.chatlang</button>
         </div>
         <div class="status" id="status"></div>
       </section>
       <section class="pane">
         <div class="label">Source</div>
-        <div class="code" id="output">// load a sample or paste a session</div>
+        <div class="code" id="output">// load a sample</div>
         <div class="actions">
-          <button type="button" class="primary" id="run">Run ▶</button>
-          <button type="button" id="copy">Copy as code</button>
+          <button type="button" class="primary" id="run">Roast ▶</button>
+          <button type="button" id="copy-roast">Copy roast</button>
+          <button type="button" id="copy">Copy source</button>
           <button type="button" id="download">Download .chatlang</button>
         </div>
-        <div class="effect-grid">
-          <div>
-            <div class="label">Transcript</div>
-            <pre class="trace" id="trace">// press Run</pre>
-          </div>
-          <div>
-            <div class="label">Virtual files</div>
-            <pre class="trace files" id="files">(empty)</pre>
-          </div>
+        <div class="label">Roast</div>
+        <div class="roast" id="roast">
+          <div class="roast-title" id="roast-title">// press Roast</div>
+          <ol class="roast-lines" id="roast-lines"></ol>
+          <div class="roast-score" id="roast-score"></div>
         </div>
-        <div class="label">Console</div>
-        <pre class="trace console" id="console">(empty)</pre>
+        <div class="label">Roast as code</div>
+        <pre class="trace roast-src" id="roast-src">// critic program appears here</pre>
       </section>
     </main>
-    <footer>MIT · Run executes Read/Write/Shell in a sandbox · docs/grammar.md</footer>
+    <footer>MIT · Run = roast your agent session · @chatlang/lang</footer>
   </div>
 `;
 
@@ -111,11 +109,13 @@ const status = document.querySelector<HTMLDivElement>("#status")!;
 const formats = document.querySelector<HTMLDivElement>("#formats")!;
 const samples = document.querySelector<HTMLDivElement>("#samples")!;
 const copyBtn = document.querySelector<HTMLButtonElement>("#copy")!;
+const copyRoastBtn = document.querySelector<HTMLButtonElement>("#copy-roast")!;
 const downloadBtn = document.querySelector<HTMLButtonElement>("#download")!;
 const runBtn = document.querySelector<HTMLButtonElement>("#run")!;
-const trace = document.querySelector<HTMLPreElement>("#trace")!;
-const filesEl = document.querySelector<HTMLPreElement>("#files")!;
-const consoleEl = document.querySelector<HTMLPreElement>("#console")!;
+const roastTitle = document.querySelector<HTMLDivElement>("#roast-title")!;
+const roastLines = document.querySelector<HTMLOListElement>("#roast-lines")!;
+const roastScore = document.querySelector<HTMLDivElement>("#roast-score")!;
+const roastSrc = document.querySelector<HTMLPreElement>("#roast-src")!;
 
 formats.addEventListener("click", (ev) => {
   const t = ev.target;
@@ -140,7 +140,7 @@ samples.addEventListener("click", (ev) => {
   }
   input.value = SAMPLES[key];
   render();
-  runProgram();
+  runRoast();
 });
 
 input.addEventListener("input", () => {
@@ -151,11 +151,17 @@ input.addEventListener("input", () => {
 copyBtn.addEventListener("click", async () => {
   const text = output.dataset.raw ?? output.textContent ?? "";
   await navigator.clipboard.writeText(text);
-  status.textContent = "Copied.";
+  status.textContent = "Source copied.";
+});
+
+copyRoastBtn.addEventListener("click", async () => {
+  const text = lastRoastSource || roastSrc.textContent || "";
+  await navigator.clipboard.writeText(text);
+  status.textContent = "Roast program copied.";
 });
 
 downloadBtn.addEventListener("click", () => {
-  const text = output.dataset.raw ?? "";
+  const text = lastRoastSource || output.dataset.raw || "";
   if (!text.trim()) {
     status.textContent = "Nothing to download.";
     return;
@@ -164,55 +170,41 @@ downloadBtn.addEventListener("click", () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `session.${format}.chatlang`;
+  a.download = `roast.${format}.chatlang`;
   a.click();
   URL.revokeObjectURL(url);
-  status.textContent = "Downloaded .chatlang";
+  status.textContent = "Downloaded roast .chatlang";
 });
 
-runBtn.addEventListener("click", () => runProgram());
+runBtn.addEventListener("click", () => runRoast());
 
-function clearEffects(): void {
-  trace.textContent = "// press Run";
-  filesEl.textContent = "(empty)";
-  consoleEl.textContent = "(empty)";
+function clearRoast(): void {
+  lastRoastSource = "";
+  roastTitle.textContent = "// press Roast";
+  roastLines.innerHTML = "";
+  roastScore.textContent = "";
+  roastSrc.textContent = "// critic program appears here";
 }
 
-function runProgram(): void {
+function runRoast(): void {
   if (!lastSession) {
-    trace.textContent = "// nothing to run — fix parse errors first";
-    filesEl.textContent = "(empty)";
-    consoleEl.textContent = "(empty)";
-    setState("parse_error", "no session to run");
+    clearRoast();
+    roastTitle.textContent = "// nothing to roast — fix parse errors first";
+    setState("parse_error", "no session to roast");
     return;
   }
 
-  // Always execute against sandbox. Unknown tools fall back to replay results
-  // and still hydrate Virtual files when possible.
-  const seed =
-    format === "cursor"
-      ? {
-          "/Users/demo/project": "# demo workspace\n(package.json, src/, …)\n",
-          "/Users/demo/project/README.md": "# demo project\n",
-        }
-      : {};
-
-  const result = interpret(lastSession, {
-    mode: "live",
-    world: createWorld(seed),
-  });
-
-  trace.textContent = `${result.transcript}\n\n# exit ${result.exitCode}`;
-  filesEl.textContent = formatFiles(result.world);
-  consoleEl.textContent =
-    result.world.console.length > 0
-      ? result.world.console.join("\n")
-      : "(empty)";
-
-  const fileCount = Object.keys(result.world.files).length;
+  const r = roast(lastSession);
+  lastRoastSource = r.source;
+  roastTitle.textContent = `🔥 ${r.title}`;
+  roastLines.innerHTML = r.lines
+    .map((l) => `<li>${escapeHtml(l)}</li>`)
+    .join("");
+  roastScore.textContent = `chaos ${r.score.chaos} · focus ${r.score.focus} · drama ${r.score.drama}`;
+  roastSrc.textContent = r.source;
   setState(
-    "ran",
-    `exit ${result.exitCode} · ${result.steps.length} steps · ${fileCount} files`,
+    "roasted",
+    `${r.lines.length} punches · chaos ${r.score.chaos}/10`,
   );
 }
 
@@ -286,7 +278,7 @@ function render(): void {
     lastSession = null;
     output.innerHTML = escapeHtml("// load a sample or paste a session");
     output.dataset.raw = "";
-    clearEffects();
+    clearRoast();
     setState("empty", "waiting for input");
     return;
   }
@@ -304,7 +296,7 @@ function render(): void {
             : "parse_error";
       output.textContent = `// ${result.message}`;
       output.dataset.raw = output.textContent;
-      clearEffects();
+      clearRoast();
       setState(state, result.message);
       return;
     }
@@ -315,7 +307,7 @@ function render(): void {
     output.dataset.raw = emitted.text;
     const via =
       format === "chatlang" ? "parsed .chatlang" : `from ${format} JSONL`;
-    setState("ok", `${result.session.events.length} events · ${via} · press Run`);
+    setState("ok", `${result.session.events.length} events · ${via}`);
   } catch (err) {
     lastSession = null;
     const message = err instanceof Error ? err.message : String(err);
@@ -325,7 +317,7 @@ function render(): void {
   }
 }
 
-// Boot on the executable demo so the gimmick is obvious
-input.value = SAMPLES.chatlang;
+// Boot on Cursor sample — tool spam = better roast
+input.value = SAMPLES.cursor;
 render();
-runProgram();
+runRoast();

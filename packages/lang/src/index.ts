@@ -23,3 +23,8 @@ export {
   type InterpretOptions,
   type InterpretResult,
 } from "./interpret.js";
+export {
+  roast,
+  type RoastResult,
+  type RoastScore,
+} from "./roast.js";
