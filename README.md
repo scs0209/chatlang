@@ -1,24 +1,26 @@
 # chatlang
 
-**Your agent session, as source code.**
+**A toy programming language for agent sessions.**
 
-Paste a Claude Code / Codex / Cursor session → see it as a toy programming language (`turn`, `think`, `tool`, `say`).
+Paste Claude Code / Codex / Cursor JSONL **or** write `.chatlang` source — `session`, `turn`, `think`, `tool`, `say`.
 
-> Status: v0.1 playground — paste or load a sample, see `chatlang` source.
+> Status: v0.2 — real grammar + lexer/parser (`@chatlang/lang`) + playground.
 
 ## Monorepo
 
 ```
 apps/playground/           # Vite + GitHub Pages
 packages/ir/               # canonical session IR
+packages/lang/             # .chatlang lexer + parser → IR
 packages/print/            # IR → chatlang text + tokens
 packages/parse-claude/
 packages/parse-codex/
 packages/parse-cursor/
-packages/fixtures/         # golden inputs (gate before parsers)
+packages/fixtures/         # golden JSONL inputs
+docs/grammar.md            # EBNF
 ```
 
-Local package names: `@chatlang/*` (in-repo only; no npm publish in v0.1).
+Local package names: `@chatlang/*` (in-repo only; no npm publish yet).
 
 ## Git identity
 
@@ -28,10 +30,30 @@ Local package names: `@chatlang/*` (in-repo only; no npm publish in v0.1).
 
 https://scs0209.github.io/chatlang/
 
+Try the **`.chatlang`** tab or sample **hello.chatlang**.
+
+## Example
+
+```chatlang
+session claude;
+
+turn user() {
+  say "fix the flaky test";
+}
+
+turn agent() {
+  think "check cookie expiry";
+  tool Read("{\"path\":\"src/auth.test.ts\"}");
+  result ok "file contents…";
+  say "added null check";
+}
+```
+
 ## Roadmap
 
-- **v0.1 (now):** JSONL → IR → printable `chatlang` (TypeScript). Secrets redacted on emit/copy/download.
-- **Later:** real `.chatlang` grammar + lexer/parser (candidate: **Rust → WASM**) when we add an interpreter / round-trip editor — not required for session→source display.
+- **v0.1:** JSONL → IR → printable source (TypeScript).
+- **v0.2 (now):** grammar + `@chatlang/lang` parser; emit↔parse round-trip; playground `.chatlang` mode.
+- **Later:** interpreter / packages; optional Rust→WASM for the source grammar.
 
 ## Setup
 
@@ -41,21 +63,9 @@ pnpm test
 pnpm dev   # playground
 ```
 
-## Assignment (before parser code)
-
-Drop real session files here:
-
-| Path | Format |
-|------|--------|
-| `packages/fixtures/claude/golden.jsonl` | Claude Code |
-| `packages/fixtures/codex/golden.jsonl` | Codex |
-| `packages/fixtures/cursor/golden.jsonl` | Cursor |
-
-Fill the field table in each folder’s `FIELD_TABLE.md`.
-
 ## Design
 
-See [docs/designs/chatlang.md](docs/designs/chatlang.md).
+See [docs/designs/chatlang.md](docs/designs/chatlang.md) and [docs/grammar.md](docs/grammar.md).
 
 ## License
 

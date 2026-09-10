@@ -31,13 +31,14 @@ describe("emit", () => {
       ],
     };
     const { text, tokens } = emit(ir);
+    assert.match(text, /^session claude;/m);
     assert.match(text, /turn user\(\) \{/);
-    assert.match(text, /say "fix the flaky test"/);
+    assert.match(text, /say "fix the flaky test";/);
     assert.match(text, /turn agent\(\) \{/);
-    assert.match(text, /think "check cookie expiry"/);
+    assert.match(text, /think "check cookie expiry";/);
     assert.match(text, /tool Read\(/);
     assert.match(text, /result ok /);
-    assert.match(text, /say "added null check"/);
+    assert.match(text, /say "added null check";/);
     assert.ok(tokens.some((t) => t.type === "keyword"));
   });
 

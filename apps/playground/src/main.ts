@@ -3,11 +3,14 @@ import type { SourceFormat } from "@chatlang/ir";
 import { parseClaude, claudeSignatureHit } from "@chatlang/parse-claude";
 import { parseCodex, codexSignatureHit } from "@chatlang/parse-codex";
 import { parseCursor, cursorSignatureHit } from "@chatlang/parse-cursor";
+import { parseChatlang, chatlangSignatureHit } from "@chatlang/lang";
 import { emit, type Token } from "@chatlang/print";
 
 import sampleClaude from "../../../packages/fixtures/claude/golden.jsonl?raw";
 import sampleCodex from "../../../packages/fixtures/codex/golden.jsonl?raw";
 import sampleCursor from "../../../packages/fixtures/cursor/golden.jsonl?raw";
+
+type InputMode = SourceFormat | "chatlang";
 
 type UiState =
   | "empty"
@@ -17,36 +20,53 @@ type UiState =
   | "parse_error"
   | "too_large";
 
-const SAMPLES: Record<SourceFormat, string> = {
+const SAMPLE_CHATLANG = `session claude;
+
+turn user() {
+  say "fix the flaky test";
+}
+
+turn agent() {
+  think "check cookie expiry";
+  tool Read("{\\"path\\":\\"src/auth.test.ts\\"}");
+  result ok "file contents…";
+  say "added null check";
+}
+`;
+
+const SAMPLES: Record<InputMode, string> = {
   claude: sampleClaude,
   codex: sampleCodex,
   cursor: sampleCursor,
+  chatlang: SAMPLE_CHATLANG,
 };
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app missing");
 
-let format: SourceFormat = "claude";
+let format: InputMode = "claude";
 
 app.innerHTML = `
   <div class="frame">
     <header>
       <h1 class="brand">chatlang</h1>
-      <p class="tag">Paste a Claude / Codex / Cursor session — see it as source code.</p>
+      <p class="tag">A toy language for agent sessions — paste JSONL <em>or</em> write <code>.chatlang</code> source.</p>
       <div class="formats" id="formats">
         <button type="button" data-format="claude" class="on">Claude</button>
         <button type="button" data-format="codex">Codex</button>
         <button type="button" data-format="cursor">Cursor</button>
+        <button type="button" data-format="chatlang">.chatlang</button>
       </div>
     </header>
     <main>
       <section class="pane">
         <div class="label">Input</div>
-        <textarea id="input" placeholder="Drop .jsonl / paste transcript here…"></textarea>
+        <textarea id="input" placeholder="JSONL session or .chatlang source…"></textarea>
         <div class="samples" id="samples">
           <button type="button" data-sample="claude">debug-claude</button>
           <button type="button" data-sample="codex">debug-codex</button>
           <button type="button" data-sample="cursor">cursor-multifile</button>
+          <button type="button" data-sample="chatlang">hello.chatlang</button>
         </div>
         <div class="status" id="status"></div>
       </section>
@@ -59,7 +79,7 @@ app.innerHTML = `
         </div>
       </section>
     </main>
-    <footer>MIT · @chatlang/parse-claude · parse-codex · parse-cursor · print</footer>
+    <footer>MIT · grammar in docs/grammar.md · @chatlang/lang</footer>
   </div>
 `;
 
@@ -74,7 +94,7 @@ const downloadBtn = document.querySelector<HTMLButtonElement>("#download")!;
 formats.addEventListener("click", (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLButtonElement)) return;
-  const next = t.dataset.format as SourceFormat | undefined;
+  const next = t.dataset.format as InputMode | undefined;
   if (!next) return;
   format = next;
   for (const btn of formats.querySelectorAll("button")) {
@@ -86,7 +106,7 @@ formats.addEventListener("click", (ev) => {
 samples.addEventListener("click", (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLButtonElement)) return;
-  const key = t.dataset.sample as SourceFormat | undefined;
+  const key = t.dataset.sample as InputMode | undefined;
   if (!key) return;
   format = key;
   for (const btn of formats.querySelectorAll("button")) {
@@ -124,6 +144,14 @@ downloadBtn.addEventListener("click", () => {
 });
 
 function maybeAutodetect(text: string): void {
+  if (chatlangSignatureHit(text)) {
+    format = "chatlang";
+    for (const btn of formats.querySelectorAll("button")) {
+      btn.classList.toggle("on", btn.getAttribute("data-format") === "chatlang");
+    }
+    return;
+  }
+
   const lines = text.split(/\r?\n/).filter((l) => l.trim()).slice(0, 50);
   const scores: Record<SourceFormat, number> = { claude: 0, codex: 0, cursor: 0 };
   for (const line of lines) {
@@ -144,7 +172,8 @@ function maybeAutodetect(text: string): void {
   }
 }
 
-function parseFor(fmt: SourceFormat, text: string) {
+function parseFor(fmt: InputMode, text: string) {
+  if (fmt === "chatlang") return parseChatlang(text);
   if (fmt === "claude") return parseClaude(text);
   if (fmt === "codex") return parseCodex(text);
   return parseCursor(text);
@@ -206,7 +235,9 @@ function render(): void {
     const emitted = emit(result.session);
     output.innerHTML = renderHighlighted(emitted.text, emitted.tokens);
     output.dataset.raw = emitted.text;
-    setState("ok", `${result.session.events.length} events`);
+    const via =
+      format === "chatlang" ? "parsed .chatlang" : `from ${format} JSONL`;
+    setState("ok", `${result.session.events.length} events · ${via}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     output.textContent = `// crash: ${message}`;

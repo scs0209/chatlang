@@ -51,9 +51,10 @@ function emitToolResults(
     e.push("  ", undefined);
     e.push("result", "keyword");
     e.push(" ", undefined);
-    e.push(r.ok ? "ok" : "err", "ident");
+    e.push(r.ok ? "ok" : "err", "keyword");
     e.push(" ", undefined);
     e.push(escapeChatlangString(r.summary), "string");
+    e.push(";", "punct");
     e.nl();
   }
   const omitted = results.length - shown.length;
@@ -70,7 +71,10 @@ function emitToolResults(
  */
 export function emit(ir: IrSession): EmitResult {
   const e = new Emitter();
-  e.push(`// session · format: ${ir.sourceFormat}`, "comment");
+  e.push("session", "keyword");
+  e.push(" ", undefined);
+  e.push(ir.sourceFormat, "ident");
+  e.push(";", "punct");
   e.nl();
   if (ir.truncated) {
     e.push("// truncated: soft size cap applied", "comment");
@@ -86,10 +90,12 @@ export function emit(ir: IrSession): EmitResult {
     if (!ev) break;
 
     if (ev.type === "meta") {
-      e.push(
-        `// meta ${redactSecrets(ev.key)}=${redactSecrets(ev.value)}`,
-        "comment",
-      );
+      e.push("meta", "keyword");
+      e.push(" ", undefined);
+      e.push(sanitizeIdent(redactSecrets(ev.key)), "ident");
+      e.push(" = ", "punct");
+      e.push(escapeChatlangString(ev.value), "string");
+      e.push(";", "punct");
       e.nl();
       i += 1;
       continue;
@@ -98,7 +104,7 @@ export function emit(ir: IrSession): EmitResult {
     if (ev.type === "user_message") {
       e.push("turn", "keyword");
       e.push(" ", undefined);
-      e.push("user", "ident");
+      e.push("user", "keyword");
       e.push("()", "punct");
       e.push(" {", "punct");
       e.nl();
@@ -106,6 +112,7 @@ export function emit(ir: IrSession): EmitResult {
       e.push("say", "keyword");
       e.push(" ", undefined);
       e.push(escapeChatlangString(ev.text), "string");
+      e.push(";", "punct");
       e.nl();
       e.push("}", "punct");
       e.nl();
@@ -123,7 +130,7 @@ export function emit(ir: IrSession): EmitResult {
     ) {
       e.push("turn", "keyword");
       e.push(" ", undefined);
-      e.push("agent", "ident");
+      e.push("agent", "keyword");
       e.push("()", "punct");
       e.push(" {", "punct");
       e.nl();
@@ -140,6 +147,7 @@ export function emit(ir: IrSession): EmitResult {
           e.push("think", "keyword");
           e.push(" ", undefined);
           e.push(escapeChatlangString(cur.text), "string");
+          e.push(";", "punct");
           e.nl();
         } else if (cur.type === "tool_call") {
           flushResults(e, pendingResults);
@@ -150,6 +158,7 @@ export function emit(ir: IrSession): EmitResult {
           e.push("(", "punct");
           e.push(escapeChatlangString(cur.argsJson), "string");
           e.push(")", "punct");
+          e.push(";", "punct");
           e.nl();
         } else if (cur.type === "tool_result") {
           pendingResults.push(cur);
@@ -159,6 +168,7 @@ export function emit(ir: IrSession): EmitResult {
           e.push("say", "keyword");
           e.push(" ", undefined);
           e.push(escapeChatlangString(cur.text), "string");
+          e.push(";", "punct");
           e.nl();
         }
         i += 1;

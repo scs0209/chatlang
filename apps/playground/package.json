@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@chatlang/ir": "workspace:*",
+    "@chatlang/lang": "workspace:*",
     "@chatlang/parse-claude": "workspace:*",
     "@chatlang/parse-codex": "workspace:*",
     "@chatlang/parse-cursor": "workspace:*",

@@ -13,6 +13,9 @@ importers:
       '@chatlang/ir':
         specifier: workspace:*
         version: link:../../packages/ir
+      '@chatlang/lang':
+        specifier: workspace:*
+        version: link:../../packages/lang
       '@chatlang/parse-claude':
         specifier: workspace:*
         version: link:../../packages/parse-claude
@@ -37,6 +40,25 @@ importers:
 
   packages/ir:
     devDependencies:
+      '@types/node':
+        specifier: ^22.13.10
+        version: 22.20.2
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+
+  packages/lang:
+    dependencies:
+      '@chatlang/ir':
+        specifier: workspace:*
+        version: link:../ir
+    devDependencies:
+      '@chatlang/parse-claude':
+        specifier: workspace:*
+        version: link:../parse-claude
+      '@chatlang/print':
+        specifier: workspace:*
+        version: link:../print
       '@types/node':
         specifier: ^22.13.10
         version: 22.20.2
