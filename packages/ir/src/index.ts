@@ -29,9 +29,16 @@ export type SizeGate =
   | { ok: true; text: string; truncatedByBytes: boolean }
   | { ok: false; message: string };
 
+const utf8 = new TextEncoder();
+
+/** UTF-8 byte length — browser-safe (no Node `Buffer`). */
+export function utf8ByteLength(input: string): number {
+  return utf8.encode(input).byteLength;
+}
+
 /** Hard refuse >10MB; soft truncate input to 2MB. */
 export function gateInputSize(input: string): SizeGate {
-  const bytes = Buffer.byteLength(input, "utf8");
+  const bytes = utf8ByteLength(input);
   if (bytes > SIZE_LIMITS.hardBytes) {
     return {
       ok: false,
@@ -39,9 +46,9 @@ export function gateInputSize(input: string): SizeGate {
     };
   }
   if (bytes > SIZE_LIMITS.softBytes) {
-    // truncate by UTF-16-ish code units approx via slice on string length ratio
+    // truncate by string length ratio, then walk back to soft byte cap
     let end = Math.floor(input.length * (SIZE_LIMITS.softBytes / bytes));
-    while (Buffer.byteLength(input.slice(0, end), "utf8") > SIZE_LIMITS.softBytes) {
+    while (utf8ByteLength(input.slice(0, end)) > SIZE_LIMITS.softBytes) {
       end -= 1024;
       if (end <= 0) {
         end = 0;

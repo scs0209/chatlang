@@ -188,24 +188,31 @@ function render(): void {
   }
 
   setState("detecting", `format tab: ${format}`);
-  const result = parseFor(format, text);
-  if (!result.ok) {
-    const state: UiState =
-      result.kind === "format_mismatch"
-        ? "format_mismatch"
-        : result.kind === "too_large"
-          ? "too_large"
-          : "parse_error";
-    output.textContent = `// ${result.message}`;
-    output.dataset.raw = output.textContent;
-    setState(state, result.message);
-    return;
-  }
+  try {
+    const result = parseFor(format, text);
+    if (!result.ok) {
+      const state: UiState =
+        result.kind === "format_mismatch"
+          ? "format_mismatch"
+          : result.kind === "too_large"
+            ? "too_large"
+            : "parse_error";
+      output.textContent = `// ${result.message}`;
+      output.dataset.raw = output.textContent;
+      setState(state, result.message);
+      return;
+    }
 
-  const emitted = emit(result.session);
-  output.innerHTML = renderHighlighted(emitted.text, emitted.tokens);
-  output.dataset.raw = emitted.text;
-  setState("ok", `${result.session.events.length} events`);
+    const emitted = emit(result.session);
+    output.innerHTML = renderHighlighted(emitted.text, emitted.tokens);
+    output.dataset.raw = emitted.text;
+    setState("ok", `${result.session.events.length} events`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    output.textContent = `// crash: ${message}`;
+    output.dataset.raw = output.textContent;
+    setState("parse_error", message);
+  }
 }
 
 // boot with Claude sample so the language is visible immediately
