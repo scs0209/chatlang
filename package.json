@@ -12,6 +12,7 @@
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "dev": "pnpm --filter @chatlang/playground dev",
+    "bridge": "pnpm --filter @chatlang/bridge start",
     "typecheck": "pnpm -r run typecheck"
   },
   "license": "MIT",

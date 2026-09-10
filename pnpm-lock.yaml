@@ -8,6 +8,18 @@ importers:
 
   .: {}
 
+  apps/bridge:
+    dependencies:
+      '@chatlang/ir':
+        specifier: workspace:*
+        version: link:../../packages/ir
+      '@chatlang/lang':
+        specifier: workspace:*
+        version: link:../../packages/lang
+      '@chatlang/print':
+        specifier: workspace:*
+        version: link:../../packages/print
+
   apps/playground:
     dependencies:
       '@chatlang/ir':

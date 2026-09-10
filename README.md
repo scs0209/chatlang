@@ -1,43 +1,46 @@
 # chatlang
 
-**Agent session → source code → roast.**
+**Agent session → `.chatlang` source → roast by YOUR local agent.**
 
-Paste Claude / Codex / Cursor JSONL. See it as `turn` / `think` / `tool` / `say`. Hit **Roast** — get a one-page takedown program.
+No cloud API keys in the app. Roast runs through a **localhost bridge** that shells out to `claude` or `codex` on your machine.
 
-> Status: v0.5 — **Roast** is the gimmick (`session roast; turn critic() { … }`).
+## How roast works
 
-## Live demo
-
-https://scs0209.github.io/chatlang/
-
-Opens on a Cursor sample and auto-roasts:
-
-1. Left: raw session  
-2. Right: `.chatlang` source  
-3. Below: **🔥 roast title + punches + scores**  
-4. Copy the critic program as code
-
-## Example roast output
-
-```chatlang
-session roast;
-
-// 검색중독 세션 진단서
-turn critic() {
-  say "도구 11번 호출. 손이 바빠야 유능해 보이는 그 심리.";
-  say "Web* ×5. 검색창에 살다 온 에이전트.";
-  say "한 줄 평: 리서치 인턴 모드.";
-  tool Score("{\"chaos\":9,\"focus\":2,\"drama\":4}");
-}
+```
+playground (pnpm dev)
+    → POST http://127.0.0.1:3847/roast
+    → chatlang-bridge
+    → claude -p …   or   codex exec …
+    → critic JSON → session roast; turn critic() { … }
 ```
 
-## Setup
+GitHub Pages (HTTPS) **cannot** call `http://127.0.0.1` (browser mixed-content). Use local:
 
 ```bash
 pnpm install
-pnpm test
-pnpm dev
+pnpm bridge    # terminal 1 — needs claude or codex on PATH
+pnpm dev       # terminal 2 — open the printed localhost URL
 ```
+
+Then **Roast with local agent**.
+
+## Live demo (parse only)
+
+https://scs0209.github.io/chatlang/ — JSONL→source works; roast needs the local bridge.
+
+## Monorepo
+
+```
+apps/playground/     # UI
+apps/bridge/         # local agent roast server
+packages/lang/       # grammar, parser, (offline heuristic kept for tests)
+packages/parse-*/
+docs/grammar.md
+```
+
+## Git identity
+
+Commits/pushes: `scs0209 <scs0209@users.noreply.github.com>` only. See CONTRIBUTING.md.
 
 ## License
 

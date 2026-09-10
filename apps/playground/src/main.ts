@@ -3,11 +3,7 @@ import type { IrSession, SourceFormat } from "@chatlang/ir";
 import { parseClaude, claudeSignatureHit } from "@chatlang/parse-claude";
 import { parseCodex, codexSignatureHit } from "@chatlang/parse-codex";
 import { parseCursor, cursorSignatureHit } from "@chatlang/parse-cursor";
-import {
-  parseChatlang,
-  chatlangSignatureHit,
-  roast,
-} from "@chatlang/lang";
+import { parseChatlang, chatlangSignatureHit } from "@chatlang/lang";
 import { emit, type Token } from "@chatlang/print";
 
 import sampleClaude from "../../../packages/fixtures/claude/golden.jsonl?raw";
@@ -23,7 +19,11 @@ type UiState =
   | "format_mismatch"
   | "parse_error"
   | "too_large"
-  | "roasted";
+  | "roasted"
+  | "bridge";
+
+const BRIDGE_URL =
+  import.meta.env.VITE_CHATLANG_BRIDGE ?? "http://127.0.0.1:3847";
 
 const SAMPLE_CHATLANG = `session claude;
 
@@ -55,18 +55,22 @@ if (!app) throw new Error("#app missing");
 let format: InputMode = "cursor";
 let lastSession: IrSession | null = null;
 let lastRoastSource = "";
+let bridgeOk = false;
+let bridgeAgents = "";
 
 app.innerHTML = `
   <div class="frame">
     <header>
       <h1 class="brand">chatlang</h1>
-      <p class="tag">에이전트 세션을 붙여넣으면 → 소스코드로 바뀌고 → <strong>Roast</strong>가 한 페이지로 디스한다.</p>
+      <p class="tag">세션 → <code>.chatlang</code> → <strong>로컬 에이전트</strong>가 Roast.
+        클라우드 API 키 없음. <code>pnpm bridge</code> + 로컬 <code>claude</code>/<code>codex</code>.</p>
       <div class="formats" id="formats">
         <button type="button" data-format="claude">Claude</button>
         <button type="button" data-format="codex">Codex</button>
         <button type="button" data-format="cursor" class="on">Cursor</button>
         <button type="button" data-format="chatlang">.chatlang</button>
       </div>
+      <div class="bridge-bar" id="bridge-bar">bridge: checking…</div>
     </header>
     <main>
       <section class="pane">
@@ -84,22 +88,22 @@ app.innerHTML = `
         <div class="label">Source</div>
         <div class="code" id="output">// load a sample</div>
         <div class="actions">
-          <button type="button" class="primary" id="run">Roast ▶</button>
+          <button type="button" class="primary" id="run">Roast with local agent ▶</button>
           <button type="button" id="copy-roast">Copy roast</button>
           <button type="button" id="copy">Copy source</button>
           <button type="button" id="download">Download .chatlang</button>
         </div>
         <div class="label">Roast</div>
         <div class="roast" id="roast">
-          <div class="roast-title" id="roast-title">// press Roast</div>
+          <div class="roast-title" id="roast-title">// connect bridge, then Roast</div>
           <ol class="roast-lines" id="roast-lines"></ol>
           <div class="roast-score" id="roast-score"></div>
         </div>
         <div class="label">Roast as code</div>
-        <pre class="trace roast-src" id="roast-src">// critic program appears here</pre>
+        <pre class="trace roast-src" id="roast-src">// critic program from your local agent</pre>
       </section>
     </main>
-    <footer>MIT · Run = roast your agent session · @chatlang/lang</footer>
+    <footer>MIT · roast via localhost bridge → claude/codex CLI · not cloud API keys</footer>
   </div>
 `;
 
@@ -116,6 +120,7 @@ const roastTitle = document.querySelector<HTMLDivElement>("#roast-title")!;
 const roastLines = document.querySelector<HTMLOListElement>("#roast-lines")!;
 const roastScore = document.querySelector<HTMLDivElement>("#roast-score")!;
 const roastSrc = document.querySelector<HTMLPreElement>("#roast-src")!;
+const bridgeBar = document.querySelector<HTMLDivElement>("#bridge-bar")!;
 
 formats.addEventListener("click", (ev) => {
   const t = ev.target;
@@ -140,7 +145,6 @@ samples.addEventListener("click", (ev) => {
   }
   input.value = SAMPLES[key];
   render();
-  runRoast();
 });
 
 input.addEventListener("input", () => {
@@ -176,36 +180,110 @@ downloadBtn.addEventListener("click", () => {
   status.textContent = "Downloaded roast .chatlang";
 });
 
-runBtn.addEventListener("click", () => runRoast());
+runBtn.addEventListener("click", () => {
+  void runRoast();
+});
 
-function clearRoast(): void {
+function clearRoast(msg = "// connect bridge, then Roast"): void {
   lastRoastSource = "";
-  roastTitle.textContent = "// press Roast";
+  roastTitle.textContent = msg;
   roastLines.innerHTML = "";
   roastScore.textContent = "";
-  roastSrc.textContent = "// critic program appears here";
+  roastSrc.textContent = "// critic program from your local agent";
 }
 
-function runRoast(): void {
+async function probeBridge(): Promise<void> {
+  try {
+    const r = await fetch(`${BRIDGE_URL}/health`, { signal: AbortSignal.timeout(1500) });
+    const data = (await r.json()) as {
+      ok?: boolean;
+      agents?: { id: string; available: boolean }[];
+    };
+    bridgeOk = !!data.ok;
+    const agents = (data.agents ?? [])
+      .map((a) => `${a.id}${a.available ? "✓" : "✗"}`)
+      .join(" ");
+    bridgeAgents = agents;
+    bridgeBar.textContent = bridgeOk
+      ? `bridge online @ ${BRIDGE_URL} · ${agents || "no agents"}`
+      : `bridge offline — run: pnpm bridge`;
+    bridgeBar.classList.toggle("on", bridgeOk);
+  } catch {
+    bridgeOk = false;
+    bridgeBar.textContent =
+      "bridge offline — local only: pnpm bridge  (GitHub Pages cannot reach localhost)";
+    bridgeBar.classList.remove("on");
+  }
+}
+
+async function runRoast(): Promise<void> {
   if (!lastSession) {
-    clearRoast();
-    roastTitle.textContent = "// nothing to roast — fix parse errors first";
+    clearRoast("// nothing to roast — fix parse errors first");
     setState("parse_error", "no session to roast");
     return;
   }
 
-  const r = roast(lastSession);
-  lastRoastSource = r.source;
-  roastTitle.textContent = `🔥 ${r.title}`;
-  roastLines.innerHTML = r.lines
-    .map((l) => `<li>${escapeHtml(l)}</li>`)
-    .join("");
-  roastScore.textContent = `chaos ${r.score.chaos} · focus ${r.score.focus} · drama ${r.score.drama}`;
-  roastSrc.textContent = r.source;
-  setState(
-    "roasted",
-    `${r.lines.length} punches · chaos ${r.score.chaos}/10`,
-  );
+  await probeBridge();
+  if (!bridgeOk) {
+    clearRoast("// bridge offline");
+    roastLines.innerHTML = `<li>로컬에서 <code>pnpm bridge</code> 실행 후 다시 Roast</li>
+      <li>PATH에 <code>claude</code> 또는 <code>codex</code> CLI 필요</li>
+      <li>GitHub Pages(HTTPS)→localhost는 브라우저가 막아, <code>pnpm dev</code>에서 써야 함</li>`;
+    setState("bridge", "local agent bridge required");
+    return;
+  }
+
+  roastTitle.textContent = "🔥 roasting via local agent…";
+  roastLines.innerHTML = "";
+  roastScore.textContent = bridgeAgents;
+  setState("bridge", "waiting on local agent…");
+  runBtn.disabled = true;
+
+  try {
+    const chatlang = output.dataset.raw ?? emit(lastSession).text;
+    const res = await fetch(`${BRIDGE_URL}/roast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent: "auto",
+        chatlang,
+        session: lastSession,
+      }),
+    });
+    const data = (await res.json()) as {
+      ok?: boolean;
+      error?: string;
+      title?: string;
+      lines?: string[];
+      score?: { chaos: number; focus: number; drama: number };
+      source?: string;
+      provider?: string;
+    };
+
+    if (!res.ok || !data.ok) {
+      clearRoast("// local agent failed");
+      roastLines.innerHTML = `<li>${escapeHtml(data.error ?? res.statusText)}</li>`;
+      setState("parse_error", data.error ?? "roast failed");
+      return;
+    }
+
+    lastRoastSource = data.source ?? "";
+    roastTitle.textContent = `🔥 ${data.title ?? "roast"} · via ${data.provider ?? "local"}`;
+    roastLines.innerHTML = (data.lines ?? [])
+      .map((l) => `<li>${escapeHtml(l)}</li>`)
+      .join("");
+    const s = data.score ?? { chaos: 0, focus: 0, drama: 0 };
+    roastScore.textContent = `chaos ${s.chaos} · focus ${s.focus} · drama ${s.drama} · ${data.provider}`;
+    roastSrc.textContent = data.source ?? "";
+    setState("roasted", `via ${data.provider} · ${(data.lines ?? []).length} punches`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    clearRoast("// bridge request failed");
+    roastLines.innerHTML = `<li>${escapeHtml(message)}</li>`;
+    setState("parse_error", message);
+  } finally {
+    runBtn.disabled = false;
+  }
 }
 
 function maybeAutodetect(text: string): void {
@@ -317,7 +395,6 @@ function render(): void {
   }
 }
 
-// Boot on Cursor sample — tool spam = better roast
 input.value = SAMPLES.cursor;
 render();
-runRoast();
+void probeBridge();
