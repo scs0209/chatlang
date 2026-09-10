@@ -24,6 +24,15 @@ Local package names: `@chatlang/*` (in-repo only; no npm publish in v0.1).
 
 **Commits and pushes must be `scs0209 <scs0209@users.noreply.github.com>` only** (not personal/work accounts). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Live demo
+
+https://scs0209.github.io/chatlang/
+
+## Roadmap
+
+- **v0.1 (now):** JSONL → IR → printable `chatlang` (TypeScript). Secrets redacted on emit/copy/download.
+- **Later:** real `.chatlang` grammar + lexer/parser (candidate: **Rust → WASM**) when we add an interpreter / round-trip editor — not required for session→source display.
+
 ## Setup
 
 ```bash

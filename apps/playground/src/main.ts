@@ -55,6 +55,7 @@ app.innerHTML = `
         <div class="code" id="output">// load a sample or paste a session</div>
         <div class="actions">
           <button type="button" class="primary" id="copy">Copy as code</button>
+          <button type="button" id="download">Download .chatlang</button>
         </div>
       </section>
     </main>
@@ -68,6 +69,7 @@ const status = document.querySelector<HTMLDivElement>("#status")!;
 const formats = document.querySelector<HTMLDivElement>("#formats")!;
 const samples = document.querySelector<HTMLDivElement>("#samples")!;
 const copyBtn = document.querySelector<HTMLButtonElement>("#copy")!;
+const downloadBtn = document.querySelector<HTMLButtonElement>("#download")!;
 
 formats.addEventListener("click", (ev) => {
   const t = ev.target;
@@ -103,6 +105,22 @@ copyBtn.addEventListener("click", async () => {
   const text = output.dataset.raw ?? output.textContent ?? "";
   await navigator.clipboard.writeText(text);
   status.textContent = "Copied.";
+});
+
+downloadBtn.addEventListener("click", () => {
+  const text = output.dataset.raw ?? "";
+  if (!text.trim()) {
+    status.textContent = "Nothing to download.";
+    return;
+  }
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `session.${format}.chatlang`;
+  a.click();
+  URL.revokeObjectURL(url);
+  status.textContent = "Downloaded .chatlang";
 });
 
 function maybeAutodetect(text: string): void {

@@ -157,12 +157,13 @@ Scan first **50** lines (or 64KB). Each line may contribute **at most one** form
 
 ## Next Steps
 
-0. Name lock **or** proceed with temporary in-repo `@chatlang/*` (no npm).
-1. `git init` + pnpm workspace scaffold.
-2. **The Assignment:** capture 3 golden transcripts + field tables → `packages/fixtures`.
-3. `ir` + `print` + Claude parser E2E + playground sample.
-4. Codex + Cursor parsers; tabs + auto-detect heuristics from signatures.
-5. Copy as code, redact, size limits, Pages deploy, README shot. Download `.chatlang` if cheap.
+0–5. Done (scaffold, fixtures, parsers, playground, Pages).
+6. Optional polish: README GIF, Monaco highlight, npm publish.
+7. **10x:** `.chatlang` grammar + interpreter; consider Rust→WASM lexer when parsing source files (not JSONL adapters).
+
+## Roadmap note (parsers)
+
+Session adapters stay TypeScript. A native/WASM parser is for **chatlang source text**, if/when the language becomes executable — not for Claude/Codex/Cursor JSONL.
 
 ## The Assignment
 

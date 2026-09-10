@@ -40,4 +40,19 @@ describe("emit", () => {
     assert.match(text, /say "added null check"/);
     assert.ok(tokens.some((t) => t.type === "keyword"));
   });
+
+  it("redacts secrets in emitted strings", () => {
+    const ir: IrSession = {
+      sourceFormat: "claude",
+      events: [
+        {
+          type: "user_message",
+          text: "token sk-abcdefghijklmnopqrstuvwxyz012345",
+        },
+      ],
+    };
+    const { text } = emit(ir);
+    assert.match(text, /\[REDACTED\]/);
+    assert.doesNotMatch(text, /sk-abcdefghijklmnopqrstuvwxyz012345/);
+  });
 });

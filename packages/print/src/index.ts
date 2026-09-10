@@ -1,4 +1,7 @@
 import type { IrEvent, IrSession } from "@chatlang/ir";
+import { redactSecrets } from "./redact.js";
+
+export { redactSecrets } from "./redact.js";
 
 export type TokenType = "keyword" | "ident" | "string" | "comment" | "punct";
 
@@ -17,9 +20,9 @@ export interface EmitResult {
 
 const TOOL_RESULT_PRINT_CAP = 20;
 
-/** JSON-style string literal for chatlang source. */
+/** JSON-style string literal for chatlang source (secrets redacted first). */
 export function escapeChatlangString(value: string): string {
-  return JSON.stringify(value);
+  return JSON.stringify(redactSecrets(value));
 }
 
 class Emitter {
@@ -83,7 +86,10 @@ export function emit(ir: IrSession): EmitResult {
     if (!ev) break;
 
     if (ev.type === "meta") {
-      e.push(`// meta ${ev.key}=${ev.value}`, "comment");
+      e.push(
+        `// meta ${redactSecrets(ev.key)}=${redactSecrets(ev.value)}`,
+        "comment",
+      );
       e.nl();
       i += 1;
       continue;
