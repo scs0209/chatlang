@@ -157,13 +157,13 @@ Scan first **50** lines (or 64KB). Each line may contribute **at most one** form
 
 ## Next Steps
 
-0–5. Done (scaffold, fixtures, parsers, playground, Pages).
-6. Optional polish: README GIF, Monaco highlight, npm publish.
-7. **10x:** `.chatlang` grammar + interpreter; consider Rust→WASM lexer when parsing source files (not JSONL adapters).
+0–6. Done (scaffold, fixtures, parsers, playground, Pages, **grammar + `@chatlang/lang`**).
+7. Optional polish: README GIF, Monaco, editable Source pane.
+8. **10x:** interpreter / packages; Rust→WASM only if source parsing needs it.
 
 ## Roadmap note (parsers)
 
-Session adapters stay TypeScript. A native/WASM parser is for **chatlang source text**, if/when the language becomes executable — not for Claude/Codex/Cursor JSONL.
+Session adapters stay TypeScript. `@chatlang/lang` parses **chatlang source**. Native/WASM is optional later for the executable language path — not for Claude/Codex/Cursor JSONL.
 
 ## The Assignment
 
