@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, constants } from "node:fs/promises";
+import { access, constants, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -21,14 +21,13 @@ describe("fixtures gate", () => {
       assert.equal(await exists(join(root, format, "FIELD_TABLE.md")), true);
     });
 
-    it(`${format}: golden file placeholder documented (optional until capture)`, async () => {
-      const jsonl = await exists(join(root, format, "golden.jsonl"));
-      const json = await exists(join(root, format, "golden.json"));
-      const readme = await exists(join(root, format, "PLACE_GOLDEN_HERE.md"));
-      assert.ok(
-        jsonl || json || readme,
-        "expected golden.* or PLACE_GOLDEN_HERE.md",
-      );
+    it(`${format}: golden.jsonl present and non-empty`, async () => {
+      const p = join(root, format, "golden.jsonl");
+      assert.equal(await exists(p), true);
+      const text = await readFile(p, "utf8");
+      assert.ok(text.trim().length > 0);
+      assert.ok(!text.includes("/Users/ayaan"));
+      assert.ok(!/shoplworks/i.test(text));
     });
   }
 });

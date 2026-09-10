@@ -1,23 +1,28 @@
 # Codex fixture field table
 
-**Status:** empty — capture a real session before implementing `@chatlang/parse-codex`.
+**Status:** filled — `golden.jsonl` is a **redacted** Codex Desktop/CLI rollout extract. `cwd` / paths scrubbed; long `base_instructions` truncated.
 
-## Capture
+## Capture source (local only, not committed)
 
-Typical location (macOS): `~/.codex/sessions/` (rollout / session logs)
+Typical location (macOS): `~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl`
 
-Copy one representative session to `golden.jsonl` (or `golden.json`) in this folder, then delete `PLACE_GOLDEN_HERE.md`.
-
-## Field table (fill after capture)
+## Field table
 
 | Field / path | Meaning | Required for v0.1 |
 |--------------|---------|-------------------|
-| _TBD_ | | |
+| `type` | `session_meta` \| `turn_context` \| `response_item` \| `event_msg` | yes |
+| `timestamp` | Event time | no |
+| `payload` | Type-specific object | yes |
+| `payload.cwd` (session_meta) | Workspace (redacted) | no |
+| `payload.id` (session_meta) | Session id | no |
+| `response_item` payload | Model/user items (messages / tool calls) | yes for dialogue |
 
-## Detect signatures (fill after capture)
+## Detect signatures
 
-- _TBD_
+- `"type":"session_meta"` with `payload.originator` / `cli_version`
+- Or `"type":"response_item"` / `"type":"event_msg"` in rollout JSONL
 
-## Unsupported variants
+## Unsupported variants (v0.1)
 
-_TBD_
+- Other Codex storage formats (SQLite, non-rollout exports)
+- Huge binary/image payloads inside items (drop / summarize)

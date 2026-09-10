@@ -1,24 +1,29 @@
 # Claude Code fixture field table
 
-**Status:** empty — capture a real session before implementing `@chatlang/parse-claude`.
+**Status:** filled — `golden.jsonl` is a **redacted** extract from a real Claude Code session (schema-faithful). Personal paths/emails scrubbed for public OSS.
 
-## Capture
+## Capture source (local only, not committed)
 
 Typical location (macOS): `~/.claude/projects/<encoded-cwd>/*.jsonl`
 
-Copy one representative session to `golden.jsonl` in this folder, then delete `PLACE_GOLDEN_HERE.md`.
-
-## Field table (fill after capture)
+## Field table
 
 | Field / path | Meaning | Required for v0.1 |
 |--------------|---------|-------------------|
-| _TBD_ | | |
+| `type` | Line kind: `user` \| `assistant` \| `system` (also see unsupported) | yes |
+| `message.role` | `user` / `assistant` | yes |
+| `message.content` | string **or** array of blocks (`text`, `thinking`, `tool_use`, `tool_result`) | yes |
+| `sessionId` | Session UUID | no (meta) |
+| `timestamp` | ISO timestamp | no |
+| `cwd` | Workspace cwd (redacted in golden) | no |
+| `uuid` / `parentUuid` | Event linkage | no |
 
-## Detect signatures (fill after capture)
+## Detect signatures (auto-detect hits)
 
-- Line patterns that count as one “hit” for auto-detect (max 1 hit per line):
-  - _TBD_
+- Line JSON has `"type":"user"` or `"type":"assistant"` **and** `"sessionId"`
+- Or `"message"` object with `"role"` + Claude-style `parentUuid` present
 
-## Unsupported variants
+## Unsupported variants (v0.1)
 
-Document other Claude export shapes we will **not** support in v0.1.
+- `attachment`, `queue-operation`, `file-history-snapshot`, `permission-mode`, `last-prompt` lines (ignored by parser)
+- Non-JSONL Claude share links / HTML exports

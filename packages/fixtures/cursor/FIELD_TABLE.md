@@ -1,23 +1,26 @@
 # Cursor fixture field table
 
-**Status:** empty — capture a real session before implementing `@chatlang/parse-cursor`.
+**Status:** filled — `golden.jsonl` is a **redacted** Cursor agent-transcript extract (`~/.cursor/projects/.../agent-transcripts/`).
 
-## Capture
+## Capture source (local only, not committed)
 
-Cursor agent / composer transcripts vary by version. Prefer an exported or on-disk session you can re-read bit-identically.
+Typical location (macOS): `~/.cursor/projects/<project-id>/agent-transcripts/<uuid>/<uuid>.jsonl`
 
-Copy one representative session to `golden.jsonl` (or `golden.json`) in this folder, then delete `PLACE_GOLDEN_HERE.md`.
-
-## Field table (fill after capture)
+## Field table
 
 | Field / path | Meaning | Required for v0.1 |
 |--------------|---------|-------------------|
-| _TBD_ | | |
+| `role` | `user` \| `assistant` \| `turn_ended` (and possibly others) | yes |
+| `message` | Object or null | yes for user/assistant |
+| `message.content` | Array of content parts (often `{type:"text", text:"..."}`) | yes |
 
-## Detect signatures (fill after capture)
+## Detect signatures
 
-- _TBD_
+- `"role":"user"` / `"role":"assistant"` with `"message":{"content":...}`
+- Path/name containing `agent-transcripts` is a capture hint only (not in-file)
 
-## Unsupported variants
+## Unsupported variants (v0.1)
 
-v0.1 supports **only** the captured fixture variant.
+- Composer DB / workspaceStorage blobs other than agent-transcripts JSONL
+- Subagent transcript folders (separate files) — v0.1 = one golden file shape only
+- `turn_ended` lines may be ignored by parser (not printed as turns)
